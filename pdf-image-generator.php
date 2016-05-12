@@ -5,7 +5,7 @@
 * Description: Generate automatically cover image of PDF by using ImageMagick. Insert PDF link with image into editor. Allow PDF to be set as featured image and to be used as image filetype.
 * Author: Mizuho Ogino 
 * Author URI: http://web.contempo.jp
-* Version: 1.4.4
+* Version: 1.4.4d
 * License: http://www.gnu.org/licenses/gpl.html GPL v2 or later
 * Text Domain: pdf-image-generator
 * Domain Path: /languages
