@@ -395,7 +395,6 @@ class PIGEN {
 
 				if( strpos($get_color,'cmyk') !== false || strpos($get_color,'CMYK') !== false ){
 					$colorspace = "-strip -profile ".$plugins_url."/iccprofiles/GenericCMYK.icm -profile ".$plugins_url."/iccprofiles/sRGB_ICC_v4_appearance_beta_displayclass.icc -colorspace sRGB";
-					$file_url = str_replace( '-pdf', '-pdf-v'.$version, $file_url );
 				}
 			}
 			if ( $property ) {
