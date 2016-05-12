@@ -10,7 +10,7 @@ This plugin hooks to the media editor and generates the first page image of PDF 
 
 Authors
 -------
-[MIZUHO OGINO](https://github.com/oginomizuho)
+[OGINO Mizuho](https://github.com/oginomizuho)
 
 
 License
