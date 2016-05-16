@@ -5,7 +5,7 @@
 * Description: Generate automatically cover image of PDF by using ImageMagick. Insert PDF link with image into editor. Allow PDF to be set as featured image and to be used as image filetype.
 * Author: Mizuho Ogino 
 * Author URI: http://web.contempo.jp
-* Version: 1.4.4d
+* Version: 1.4.5d
 * License: http://www.gnu.org/licenses/gpl.html GPL v2 or later
 * Text Domain: pdf-image-generator
 * Domain Path: /languages
@@ -75,8 +75,7 @@ class PIGEN {
 			'image_type' => ( isset( $opt[ 'image_type' ] ) ? $opt[ 'image_type' ] : 'jpg' ),
 			'image_bgcolor' => ( isset( $opt[ 'image_bgcolor' ] ) ? $opt[ 'image_bgcolor' ] : 'white' ),
 			'featured' => isset( $opt[ 'featured' ] ) ? $opt[ 'featured' ] : 'true',
-			'verify_imagick' => $verify_imagick,
-			'version' => $version
+			'verify_imagick' => $verify_imagick
 		);
 		update_option( 'pigen_options', $update_option );
 	}
@@ -97,7 +96,6 @@ class PIGEN {
 						$version = $this->pigen_imageMagick_ver();
 						$verify_imagick = 'imageMagick';
 					}
-					$opt['version'] = $version;
 					$opt['verify_imagick'] = $verify_imagick;
 					update_option( 'pigen_options', $opt );
 					return;
@@ -108,7 +106,7 @@ class PIGEN {
 
 
 	function pigen_imageMagick_ver() {
-		$version = false;
+		$version = 0;
 		if ( function_exists('exec') ) {
 			exec( 'convert -version', $arr, $res );
 			if ( $res === 0 && count($arr) > 2 ) {
@@ -121,7 +119,7 @@ class PIGEN {
 
 
 	function pigen_imagick_ver() { 
-		$version = false;
+		$version = 0;
 		if ( extension_loaded('imagick') ) {
 			$im = new imagick();
 			$v = $im->getVersion();
@@ -153,6 +151,7 @@ class PIGEN {
 
 	public function pigen_options() { 
 		if ( isset( $_POST['pigen_options_nonce'] ) && wp_verify_nonce( $_POST['pigen_options_nonce'], basename(__FILE__) ) ) { // save options
+
 			$update_options = array( 
 				'changeicon' => ( isset( $_POST[ 'pigen_changeicon' ] ) ? $_POST[ 'pigen_changeicon' ] : '' ),
 				'featured' => ( isset( $_POST[ 'pigen_featured' ] ) ? $_POST[ 'pigen_featured' ] : '' ),
@@ -165,8 +164,7 @@ class PIGEN {
 				'image_type' => ( !empty( $_POST[ 'pigen_image_type' ] ) ? $_POST[ 'pigen_image_type' ] : 'jpg' ),
 				'image_bgcolor' => ( !empty( $_POST[ 'pigen_image_bgcolor' ] ) ? $_POST[ 'pigen_image_bgcolor' ] : 'white' ),
 				'keepthumbs' => ( isset( $_POST[ 'pigen_keepthumbs' ] ) ? $_POST[ 'pigen_keepthumbs' ] : '' ),
-				'verify_imagick' => ( isset( $_POST[ 'pigen_verify_imagick' ] ) ? $_POST[ 'pigen_verify_imagick' ] : 'imageMagick' ),
-				'version' => ( isset( $_POST[ 'pigen_im_version' ] ) ? $_POST[ 'pigen_im_version' ] : '' )
+				'verify_imagick' => ( isset( $_POST[ 'pigen_verify_imagick' ] ) ? $_POST[ 'pigen_verify_imagick' ] : 'imageMagick' )
 			);
 			update_option( 'pigen_options', $update_options );
 			echo '<div class="updated fade"><p><strong>'. __('Options saved.', 'pdf-image-generator'). '</strong></p></div>';
@@ -278,8 +276,7 @@ class PIGEN {
 				"\t\t".'</div>'."\n".
 				"\t\t".'<div>'."\n".
 				"\t\t\t".'<p><span class="float"><input type="radio" id="pigen_verify_imageMagick" name="pigen_verify_imagick" value="imageMagick" '.( $verify_imagick === 'imageMagick' ? 'checked="checked"' : '' ).( $imageMagick_ver ? '' : ' disabled' ).' /><label for="pigen_verify_imageMagick">'.__( 'Use imageMagick with exec function', 'pdf-image-generator' ).'</label></span><span class="float"><input type="radio" id="pigen_verify_imagick" name="pigen_verify_imagick" value="imagick" '.( $verify_imagick === 'imagick' ? 'checked="checked"' : '' ).( $imagick_ver ? '' : ' disabled' ).' /><label for="pigen_verify_imagick">'.__( 'Use imagick PHP Extension', 'pdf-image-generator' ).'</label></span></p>'."\n".
-				"\t\t\t".'<p class="subfield note">'.sprintf(__('Your server using imageMagick %s', 'pdf-image-generator'), $imagick_ver ? $imagick_ver : $imageMagick_ver ).'</p>'."\n".
-				"\t\t\t".'<input type="hidden" name="pigen_im_version" value="'.( $imagick_ver ? $imagick_ver : $imageMagick_ver ).'" />'."\n".
+				"\t\t\t".'<p class="subfield note">'.sprintf(__('Your server using imageMagick %s', 'pdf-image-generator'), $verify_imagick === 'imagick' ? $imagick_ver : $imageMagick_ver ).'</p>'."\n".
 				"\t\t".'</div>'."\n".
 				"\t".'</fieldset>'."\n".
 				"\t".'<p class="submit"><input type="submit" name="Submit" class="button-primary" value="'.__( 'Save changes', 'pdf-image-generator' ).'" /></p>'."\n".
@@ -310,7 +307,6 @@ class PIGEN {
 		$max_width = ( !empty($opt[ 'maxwidth' ]) ? (int) $opt[ 'maxwidth' ] : 1024 );
 		$max_height = ( !empty($opt[ 'maxheight' ]) ? (int) $opt[ 'maxheight' ] : 1024 );
 		$quality = ( !empty($opt[ 'quality' ]) ? (int) $opt[ 'quality' ] : 80 );
-		$version = ( !empty($opt[ 'version' ]) ? $opt[ 'version' ] : '' );
 		if ( $quality > 100 ) $quality = 100;
 		$image_bgcolor = ( $property && isset($opt[ 'image_bgcolor' ]) ? $opt[ 'image_bgcolor' ] : 'white' );
 		$verify_imagick = ( isset($opt[ 'verify_imagick' ]) ? $opt[ 'verify_imagick' ] : '' );
@@ -318,6 +314,7 @@ class PIGEN {
 		$file_basename = apply_filters( 'pigen_filter_convert_file_basename', $file_basename );
 		$file_url = str_replace( basename($file), $file_basename, $file );
 		if ( $verify_imagick == 'imagick' ) { // imagick API
+			$version = $this->pigen_imagick_ver();
 			try { 
 				$imagick = new imagick();
 				if ( $property ) {
@@ -329,7 +326,6 @@ class PIGEN {
 					$imagick->readimage( $file.'[0]' );
 					$imagick->setResolution( 72, 72 );
 				}
-
 
 				if ( version_compare($version,'6.3.8') < 0 ){
 					$imagick->setImageBackgroundColor( $image_bgcolor );
@@ -346,6 +342,7 @@ class PIGEN {
 				} 
 				$colorspace = $imagick->getImageColorspace();
 				if ($colorspace == Imagick::COLORSPACE_CMYK) {
+					$plugin_dir_path = plugin_dir_path( __FILE__ );
 					// if ( version_compare($version,'6.3.6') >= 0 ){
 					// 	$profiles = $image->getImageProfiles('*', false); // get profiles
 					// 	$has_icc_profile = (array_search('icc', $profiles) !== false);
@@ -354,13 +351,12 @@ class PIGEN {
 					// 		$image->profileImage('icc', $icc_cmyk);
 					// 	}
 					// } else {
-						$plugins_url = plugins_url( '', __FILE__ );
 						$imagick->stripImage();
-						$icc_cmyk = file_get_contents( $plugins_url.'/iccprofiles/GenericCMYK.icm' );
+						$icc_cmyk = file_get_contents( $plugin_dir_path.'/iccprofiles/GenericCMYK.icm' );
 						$imagick->profileImage('icm', $icc_cmyk);
 						unset($icc_cmyk);
 					// } 
-					$icc_rgb = file_get_contents( $plugins_url.'/iccprofiles/sRGB_ICC_v4_appearance_beta_displayclass.icc' );
+					$icc_rgb = file_get_contents( $plugin_dir_path.'/iccprofiles/sRGB_ICC_v4_appearance_beta_displayclass.icc' );
 					$imagick->profileImage('icc', $icc_rgb);
 					unset($icc_rgb); 
 
@@ -382,19 +378,21 @@ class PIGEN {
 				$file_url = false;
 			}
 		} else { // imageMagick
+			$version = $this->pigen_imageMagick_ver();
 			if ( version_compare($version,'6.7.5') < 0 ) $alphaoff = "-flatten"; else $alphaoff = "-alpha remove"; 
 			if ( version_compare($version,'6.7.7') < 0 ) $density = "-density 72"; else $density = "-density 300 -set units PixelsPerInch"; 
 
 			$get_color = exec("identify -format '%[colorspace]' {$file}[0]", $output, $return);
+
+			//$get_color = exec("identify -verbose {$file}[0]", $output, $return); // for old imagemagick
 			$colorspace = "";
 			if (!$return ){ // return non-zero upon an error
+				$plugin_dir_path = plugin_dir_path( __FILE__ );
 				// if ( version_compare($version,'6.8.7.2' ) >= 0 {
 				// 	$get_icc = exec("identify -format %[profile:icc] {$file}[0]", $output, $return);
 				// }
-				$plugins_url = plugins_url( '', __FILE__ );
-
 				if( strpos($get_color,'cmyk') !== false || strpos($get_color,'CMYK') !== false ){
-					$colorspace = "-strip -profile ".$plugins_url."/iccprofiles/GenericCMYK.icm -profile ".$plugins_url."/iccprofiles/sRGB_ICC_v4_appearance_beta_displayclass.icc -colorspace sRGB";
+					$colorspace = "-strip -profile ".$plugin_dir_path."/iccprofiles/GenericCMYK.icm -profile ".$plugin_dir_path."/iccprofiles/sRGB_ICC_v4_appearance_beta_displayclass.icc -colorspace sRGB";
 				}
 			}
 			if ( $property ) {
