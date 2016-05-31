@@ -25,6 +25,7 @@ class PIGEN {
 		add_filter( 'delete_attachment', array( $this,'pigen_delete' ) );
 		add_filter( 'wp_mime_type_icon', array( $this,'pigen_change_icon' ), 10, 3 );
 		add_filter( 'wp_get_attachment_image_src', array( $this,'pigen_wp_get_attachment_image_src' ), 10, 4 );
+		add_filter( 'wp_get_attachment_metadata', array( $this,'pigen_wp_get_attachment_metadata' ), 10, 2 );
 		add_filter( 'ajax_query_attachments_args', array( $this,'pigen_ajax_query_attachments_args' ), 100, 1 );
 		add_action( 'admin_footer-post-new.php', array( $this,'pigen_override_filter_object' ) );
 		add_action( 'admin_footer-post.php', array( $this,'pigen_override_filter_object' ) );
@@ -40,7 +41,7 @@ class PIGEN {
 		if ( $version ) {
 			$verify_imagick = 'imageMagick';
 			exec( 'which gs', $gs_arr, $gs_res ); 
-			if ( $gs_res !== 0 ){
+			if ( $gs_res !== 0 ){ // no gs
 				$version = $this->pigen_imagick_ver();
 				if ( $version ) {
 					$verify_imagick = 'imagick';
@@ -109,9 +110,9 @@ class PIGEN {
 		$version = 0;
 		if ( function_exists('exec') ) {
 			exec( 'convert -version', $arr, $res );
-			if ( $res === 0 && count($arr) > 2 ) {
+			if ( count($arr) > 2 ) {
 				preg_match('/ImageMagick ([0-9]+\.[0-9]+\.[0-9]+)/', $arr[0], $v);
-				$version = $v[1];
+				if ( isset( $v ) ) $version = $v[1];
 			}
 		}
 		return $version;
@@ -131,7 +132,7 @@ class PIGEN {
 
 
 	public function pigen_admin_menu() {
-		$page_hook_suffix = add_options_page( __( 'PDF Image Generator Settings', 'pdf-image-generator' ), __( 'PDF IMG Generator', 'pdf-image-generator' ), 'administrator', __FILE__, array( $this,'pigen_options') );
+		$page_hook_suffix = add_options_page( __( 'PDF Image Generator Settings', 'pdf-image-generator' ), __( 'PDF IMG Generator', 'pdf-image-generator' ), 8, __FILE__, array( $this,'pigen_options') ); 
 		add_action('admin_print_scripts-' . $page_hook_suffix, array( $this,'pigen_admin_scripts') );
 		if ( isset( $_GET['post'] ) && get_post_mime_type( $_GET['post'] ) === 'application/pdf') 
 			add_meta_box( 'pigen_thumbnail', __( 'Thumbnail' ), array( $this, 'pigen_add_thumbnail_to_pdf_edit_page'), 'attachment', 'side', 'default' );
@@ -529,6 +530,18 @@ class PIGEN {
 			}
 		}
 		return $image;
+	}
+
+
+	public function pigen_wp_get_attachment_metadata( $data, $post_id ) {
+		if ( get_post_mime_type ( $post_id ) === 'application/pdf' ){
+			$thumbnail_id = get_post_meta( $post_id, '_thumbnail_id', true );
+			if ( $thumbnail_id ){
+				$image_data = wp_get_attachment_metadata ( $thumbnail_id );
+				$data['sizes'] = $image_data['sizes'];
+			}
+		}
+		return $data;
 	}
 
 
