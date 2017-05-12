@@ -5,7 +5,7 @@
 * Description: Generate automatically cover image of PDF by using ImageMagick. Insert PDF link with image into editor. Allow PDF to be set as featured image and to be used as image filetype.
 * Author: Mizuho Ogino 
 * Author URI: http://web.contempo.jp
-* Version: 1.4.6a
+* Version: 1.5.6
 * License: http://www.gnu.org/licenses/gpl.html GPL v2 or later
 * Text Domain: pdf-image-generator
 * Domain Path: /languages
@@ -19,21 +19,22 @@ class PIGEN {
 		load_plugin_textdomain( 'pdf-image-generator', false, dirname( plugin_basename( __FILE__ ) ) . '/languages' ); 
 		register_activation_hook( __FILE__, array( $this,'pigen_activate' ) );
 		add_action( 'upgrader_process_complete', array( $this,'pigen_upgrader_process_complete' ), 10, 2 );
-		add_action( 'admin_menu', array( $this,'pigen_admin_menu' ) );
-		add_filter( 'add_attachment', array( $this,'pigen_attachment' ), 100 );
-		add_filter( 'media_send_to_editor', array( $this,'pigen_insert' ), 100, 3 );
+		add_action( 'admin_menu', array( $this,'pigen_admin_menu' ), 11, 0 );
+		add_filter( 'add_attachment', array( $this,'pigen_attachment' ), 11, 1 );
+		add_filter( 'media_send_to_editor', array( $this,'pigen_insert' ), 11, 3 );
 		add_filter( 'delete_attachment', array( $this,'pigen_delete' ) );
 		add_filter( 'wp_mime_type_icon', array( $this,'pigen_change_icon' ), 10, 3 );
 		add_filter( 'wp_get_attachment_image_src', array( $this,'pigen_wp_get_attachment_image_src' ), 10, 4 );
-		add_filter( 'wp_get_attachment_image_attributes', array( $this,'pigen_wp_get_attachment_image_attributes' ), 10, 3 );
+		add_filter( 'wp_get_attachment_image_attributes', array( $this,'pigen_wp_get_attachment_image_attributes' ), 10, 2 );
 		add_filter( 'wp_get_attachment_metadata', array( $this,'pigen_wp_get_attachment_metadata' ), 10, 2 );
-		add_filter( 'ajax_query_attachments_args', array( $this,'pigen_ajax_query_attachments_args' ), 100, 1 );
+		add_filter( 'ajax_query_attachments_args', array( $this,'pigen_ajax_query_attachments_args' ), 11, 1 );
 		add_action( 'admin_footer-post-new.php', array( $this,'pigen_override_filter_object' ) );
 		add_action( 'admin_footer-post.php', array( $this,'pigen_override_filter_object' ) );
-		add_filter( 'attachment_fields_to_edit', array( $this,'pigen_attachment_fields_to_edit' ), 100, 2 );
-		add_filter( 'attachment_fields_to_save', array( $this,'pigen_attachment_fields_to_save' ), 100, 2 );
+		add_filter( 'attachment_fields_to_edit', array( $this,'pigen_attachment_fields_to_edit' ), 11, 2 );
+		add_filter( 'attachment_fields_to_save', array( $this,'pigen_attachment_fields_to_save' ), 11, 2 );
 		add_filter( 'pre_get_posts', array( $this,'pigen_attachment_pre_get_posts' ), 10, 1 );
-		add_action( 'save_post', array( $this,'pigen_save_post' ), 100, 1 );
+		add_action( 'save_post', array( $this,'pigen_save_post' ), 11, 1 );
+
 	}
 
 
@@ -64,46 +65,54 @@ class PIGEN {
 				exit;
 			}
 		}
-		$opt = get_option( 'pigen_options' );
-		$update_option = array( 
-			'keepthumbs' => isset( $opt[ 'keepthumbs' ] ) ? $opt[ 'keepthumbs' ] : 'true',
-			'changeicon' => isset( $opt[ 'changeicon' ] ) ? $opt[ 'changeicon' ] : 'true',
-			'hidethumb' => isset( $opt[ 'hidethumb' ] ) ? $opt[ 'hidethumb' ] : 'true',
-			'property' => isset( $opt[ 'property' ] ) ? $opt[ 'property' ] : 'true',
-			'quality' => isset( $opt[ 'quality' ] ) ? $opt[ 'quality' ] : 80,
-			'maxwidth' => isset( $opt[ 'maxwidth' ] ) ? $opt[ 'maxwidth' ] : 1024,
-			'maxheight' => isset( $opt[ 'maxheight' ] ) ? $opt[ 'maxheight' ] : 1024,
-			'default_size' => isset( $opt[ 'default_size' ] ) ? $opt[ 'default_size' ] : 'medium',
-			'image_type' => ( isset( $opt[ 'image_type' ] ) ? $opt[ 'image_type' ] : 'jpg' ),
-			'image_bgcolor' => ( isset( $opt[ 'image_bgcolor' ] ) ? $opt[ 'image_bgcolor' ] : 'white' ),
-			'featured' => isset( $opt[ 'featured' ] ) ? $opt[ 'featured' ] : 'true',
-			'verify_imagick' => $verify_imagick
-		);
-		update_option( 'pigen_options', $update_option );
+		$this->pigen_update_options( $verify_imagick );
+		return;
 	}
 
 
 	public function pigen_upgrader_process_complete( $upgrader_object, $options ) {
 		$current_plugin_path_name = plugin_basename( __FILE__ );
-		if ( $options[ 'action' ] == 'update' && $options[ 'type' ] == 'plugin' ){
-			foreach( $options[ 'plugins' ] as $each_plugin ){
+		if ($options['action'] == 'update' && $options['type'] == 'plugin' && $options['plugins'] ){
+			foreach( $options['plugins'] as $each_plugin ){
 				if ( $each_plugin == $current_plugin_path_name ){
-					$opt = get_option( 'pigen_options' );
-					$verify_imagick = ( isset( $opt[ 'verify_imagick' ] ) ? $opt[ 'verify_imagick' ] : 'imageMagick' );
-					if ( strpos( $verify_imagick, 'imagick' ) !== false ) {
-						$version = $this->pigen_imagick_ver();
-						$verify_imagick = 'imagick';
-					}
-					if ( empty( $version ) ){
-						$version = $this->pigen_imageMagick_ver();
-						$verify_imagick = 'imageMagick';
-					}
-					$opt[ 'verify_imagick' ] = $verify_imagick;
-					update_option( 'pigen_options', $opt );
+					$this->pigen_update_options( false );
 					return;
 				}
 			}
 		}
+	}
+
+
+	public function pigen_update_options( $verify_imagick ) {
+		$opt = get_option( 'pigen_options' );
+		if ( !$opt ) $opt = array();
+		if ( !$verify_imagick ) {
+			$verify_imagick = ( isset($opt['verify_imagick']) && $opt['verify_imagick'] ? $opt['verify_imagick'] : 'imageMagick' );
+			if ( strpos( $verify_imagick, 'imagick' ) !== false ) {
+				$version = $this->pigen_imagick_ver();
+				$verify_imagick = 'imagick';
+			}
+			if ( empty( $version ) ){
+				$version = $this->pigen_imageMagick_ver();
+				$verify_imagick = 'imageMagick';
+			}
+		}
+		$update_option = array( 
+			'changeicon' => array_key_exists( 'changeicon', $opt ) ? $opt[ 'changeicon' ] : 'true',
+			'featured' => array_key_exists( 'featured', $opt ) ? $opt[ 'featured' ] : 'true',
+			'hidethumb' => array_key_exists( 'hidethumb', $opt ) ? $opt[ 'hidethumb' ] : 'true',
+			'property' => array_key_exists( 'property', $opt ) ? $opt[ 'property' ] : 'true',
+			'quality' => array_key_exists( 'quality', $opt ) ? $opt[ 'quality' ] : 80,
+			'maxwidth' => array_key_exists( 'maxwidth', $opt ) ? $opt[ 'maxwidth' ] : 1024,
+			'maxheight' => array_key_exists( 'maxheight', $opt ) ? $opt[ 'maxheight' ] : 1024,
+			'default_size' => array_key_exists( 'default_size', $opt ) && $opt[ 'default_size' ] ? $opt[ 'default_size' ] : 'medium',
+			'image_type' => array_key_exists( 'image_type', $opt ) && $opt[ 'image_type' ] ? $opt[ 'image_type' ] : 'jpg',
+			'iccprofile' => array_key_exists( 'iccprofile', $opt ) ? $opt[ 'iccprofile' ] : 'true',
+			'image_bgcolor' => array_key_exists( 'image_bgcolor', $opt ) && $opt[ 'image_bgcolor' ] ? $opt[ 'image_bgcolor' ] : 'white',
+			'keepthumbs' => array_key_exists( 'keepthumbs', $opt ) ? $opt[ 'keepthumbs' ] : 'true',
+			'verify_imagick' => $verify_imagick
+		);
+		update_option( 'pigen_options', $update_option );
 	}
 
 
@@ -133,15 +142,9 @@ class PIGEN {
 
 
 	public function pigen_admin_menu() {
-		$page_hook_suffix = add_options_page( __( 'PDF Image Generator Settings', 'pdf-image-generator' ), __( 'PDF IMG Generator', 'pdf-image-generator' ), 'edit_plugins', __FILE__, array( $this,'pigen_options' ) ); 
-		add_action( 'admin_print_scripts-' . $page_hook_suffix, array( $this,'pigen_admin_scripts' ) );
-		if ( isset( $_GET[ 'post' ] ) && get_post_mime_type( $_GET[ 'post' ] ) === 'application/pdf' ) 
-			add_meta_box( 'pigen_thumbnail', __( 'Thumbnail' ), array( $this, 'pigen_add_thumbnail_to_pdf_edit_page' ), 'attachment', 'side', 'default' );
-	}
-
-
-	public function pigen_add_thumbnail_to_pdf_edit_page(){ 
-		echo get_the_post_thumbnail( $pdf->ID, 'medium' ).'<style type="text/css"> #pigen_thumbnail { background:none; box-shadow:none; border:none; } #pigen_thumbnail .inside { padding:0; margin:0; } #pigen_thumbnail button, #pigen_thumbnail h2 { display:none; } #pigen_thumbnail img { max-width:100%; height:auto; vertical-align:bottom; box-shadow:0 1px 3px rgba( 0,0,0,.2 ); }</style>';
+		$page_hook_suffix = add_options_page( __( 'PDF Image Generator Settings', 'pdf-image-generator' ), __( 'PDF IMG Generator', 'pdf-image-generator' ), 'manage_options', __FILE__, array( $this,'pigen_options' ) ); 
+		add_action( 'admin_print_scripts-' . $page_hook_suffix, array( $this,'pigen_admin_scripts' ) );	
+		add_post_type_support( 'attachment', 'thumbnail' );
 	}
 
 
@@ -154,18 +157,19 @@ class PIGEN {
 	public function pigen_options() { 
 		if ( isset( $_POST[ 'pigen_options_nonce' ] ) && wp_verify_nonce( $_POST[ 'pigen_options_nonce' ], basename( __FILE__ ) ) ) { // Save options
 			$update_options = array(
-				'changeicon' => ( isset( $_POST[ 'pigen_changeicon' ] ) ? $_POST[ 'pigen_changeicon' ] : '' ),
-				'featured' => ( isset( $_POST[ 'pigen_featured' ] ) ? $_POST[ 'pigen_featured' ] : '' ),
-				'hidethumb' => ( isset( $_POST[ 'pigen_hidethumb' ] ) ? $_POST[ 'pigen_hidethumb' ] : '' ),
-				'property' => ( isset( $_POST[ 'pigen_property' ] ) ? $_POST[ 'pigen_property' ] : '' ),
-				'quality' => ( isset( $_POST[ 'pigen_quality' ] ) ? $_POST[ 'pigen_quality' ] : '' ),
-				'maxwidth' => ( isset( $_POST[ 'pigen_maxwidth' ] ) ? $_POST[ 'pigen_maxwidth' ] : '' ),
-				'maxheight' => ( isset( $_POST[ 'pigen_maxheight' ] ) ? $_POST[ 'pigen_maxheight' ] : '' ),
-				'default_size' => ( !empty( $_POST[ 'pigen_default_size' ] ) ? $_POST[ 'pigen_default_size' ] : 'medium' ),
-				'image_type' => ( !empty( $_POST[ 'pigen_image_type' ] ) ? $_POST[ 'pigen_image_type' ] : 'jpg' ),
-				'image_bgcolor' => ( !empty( $_POST[ 'pigen_image_bgcolor' ] ) ? $_POST[ 'pigen_image_bgcolor' ] : 'white' ),
-				'keepthumbs' => ( isset( $_POST[ 'pigen_keepthumbs' ] ) ? $_POST[ 'pigen_keepthumbs' ] : '' ),
-				'verify_imagick' => ( isset( $_POST[ 'pigen_verify_imagick' ] ) ? $_POST[ 'pigen_verify_imagick' ] : 'imageMagick' )
+				'changeicon' => isset( $_POST[ 'pigen_changeicon' ] ) ? $_POST[ 'pigen_changeicon' ] : '',
+				'featured' => isset( $_POST[ 'pigen_featured' ] ) ? $_POST[ 'pigen_featured' ] : '',
+				'hidethumb' => isset( $_POST[ 'pigen_hidethumb' ] ) ? $_POST[ 'pigen_hidethumb' ] : '',
+				'property' => isset( $_POST[ 'pigen_property' ] ) ? $_POST[ 'pigen_property' ] : '',
+				'quality' => isset( $_POST[ 'pigen_quality' ] ) ? $_POST[ 'pigen_quality' ] : 80,
+				'maxwidth' => isset( $_POST[ 'pigen_maxwidth' ] ) ? $_POST[ 'pigen_maxwidth' ] : 1024,
+				'maxheight' => isset( $_POST[ 'pigen_maxheight' ] ) ? $_POST[ 'pigen_maxheight' ] : 1024,
+				'default_size' => !empty( $_POST[ 'pigen_default_size' ] ) ? $_POST[ 'pigen_default_size' ] : 'medium',
+				'image_type' => !empty( $_POST[ 'pigen_image_type' ] ) ? $_POST[ 'pigen_image_type' ] : 'jpg',
+				'iccprofile' => isset( $_POST[ 'pigen_iccprofile' ] ) ? $_POST[ 'pigen_iccprofile' ] : '',
+				'image_bgcolor' => !empty( $_POST[ 'pigen_image_bgcolor' ] ) ? $_POST[ 'pigen_image_bgcolor' ] : 'white',
+				'keepthumbs' => isset( $_POST[ 'pigen_keepthumbs' ] ) ? $_POST[ 'pigen_keepthumbs' ] : '',
+				'verify_imagick' => isset( $_POST[ 'pigen_verify_imagick' ] ) ? $_POST[ 'pigen_verify_imagick' ] : 'imageMagick'
 			);
 			update_option( 'pigen_options', $update_options );
 			echo '<div class="updated fade"><p><strong>'. __( 'Options saved.', 'pdf-image-generator' ). '</strong></p></div>';
@@ -174,32 +178,67 @@ class PIGEN {
 		echo '<div class="wrap">'."\n";
 
 		if ( isset( $_GET[ 'run' ] ) ) {
+
+			echo '<h2>' .__( 'Generate uploaded PDF thumbnails', 'pdf-image-generator' ). '</h2>'."\n";
+
 			echo
-				'<h2>' .__( 'Generate uploaded PDF thumbnails', 'pdf-image-generator' ). '</h2>'."\n".
-				'<div id="pdf-list">'."\n".
-				'<style type="text/css">#pdf-list { padding:20px 0; } #pdf-list .pdf { display:table; } #pdf-list .pdf .img { display:table-cell; width:120px; padding:5px 0; vertical-align:middle; } #pdf-list .pdf img { border:4px solid #999; max-width:100px; max-height:100px; height:auto; width:auto; } #pdf-list .pdf.generated img { border-color:#0bf; } #pdf-list .pdf.generated strong { color:#0bf; } #pdf-list .pdf.generated img { border-color:#f6d; } #pdf-list .pdf.generated strong { color:#f6d; } #pdf-list .pdf .txt { display:table-cell; font-size:12px; vertical-align:middle; }</style>'."\n";
+				'<style type="text/css">'.
+				'#pdf-list { padding:20px 0; } '.
+				'#pdf-list .pdf { display:table; } '.
+				'#pdf-list .pdf .img { display:table-cell; width:120px; padding:5px 0; vertical-align:middle; } '.
+				'#pdf-list .pdf img { border:4px solid #999; max-width:100px; max-height:100px; height:auto; width:auto; } '.
+				'#pdf-list .pdf.generated img { border-color:#28c; } '.
+				'#pdf-list .pdf.generated strong { color:#28c; } '.
+				'#pdf-list .pdf.regenerated img { border-color:#2cb; } '.
+				'#pdf-list .pdf.regenerated strong { color:#2cb; } '.
+				'#pdf-list .pdf.error img { border-color:#c22; } '.
+				'#pdf-list .pdf.error strong { color:#c22; } '.
+				'#pdf-list .pdf .txt { display:table-cell; font-size:12px; vertical-align:middle; } '.
+				'@-webkit-keyframes spin { 0%{-webkit-transform:rotate(0deg);} 100%{-webkit-transform:rotate(720deg);} } '.
+				'@keyframes spin{ 0%{transform:rotate(0deg);} 100%{transform:rotate(720deg);} } '.
+				'#pdf-generating { position:fixed; right:10px; bottom:10px; z-index:2; -webkit-box-sizing:border-box; -moz-box-sizing:border-box; -ms-box-sizing:border-box; box-sizing:border-box; display:block; width:35px; height:35px; margin:auto; border-width:6px; border-style:solid; border-color:transparent #0095cc; border-radius:18px; -webkit-animation:spin 1.5s ease infinite; animation:spin 1.5s ease infinite;'.
+				'</style>'."\n".
+				'<div id="pdf-generating"></div>';
+
+			echo '<div id="pdf-list">'."\n";
+
 			$pigen_num = 0;
-			$pdfs = get_posts( array( 'post_type'=>'attachment','post_mime_type'=>'application/pdf','numberposts'=>-1 ) );
-			$_GET[ 'run' ] == 'regenerate' ? $regenerate = true : $regenerate = false; 
+			global $wpdb;
+			$pdfs = $wpdb->get_results( "SELECT ID FROM $wpdb->posts WHERE $wpdb->posts.post_type = 'attachment' AND $wpdb->posts.post_mime_type = 'application/pdf' " );
 			if ( $pdfs ): foreach( $pdfs as $pdf ):
+				$regenerate = ( $_GET[ 'run' ] == 'regenerate' ? true : false ); 
 				$thumbnail_id = get_post_meta( $pdf->ID, '_thumbnail_id', true );
-				if ( !$thumbnail_id || $regenerate ){
-					$pigen_num ++;
-					$this->pigen_attachment( $pdf->ID );
-					echo 
-						'<div class="pdf generated' .( $regenerate && $thumbnail_id ? ' regenerated' : '' ). '">'.
-						'<p class="img">'.get_the_post_thumbnail( $pdf->ID, 'medium' ).'</p>'.
-						'<p class="txt">ID: <a href="'.get_edit_post_link( $pdf->ID ).'">'.$pdf->ID.'</a> / <strong>' .( $regenerate && $thumbnail_id ? 'An image was REGENERATED' : 'A new image was GENERATED' ). '</strong></p>'.
-						'</div>';
+				if ( !$thumbnail_id || $regenerate ) {
+					$return = $this->pigen_attachment( $pdf->ID );
+					$thumbnail_id = get_post_meta( $pdf->ID, '_thumbnail_id', true );
+					if ( $thumbnail_id && $return ){
+						$pigen_num ++;
+						$thumbnail = wp_get_attachment_image( $thumbnail_id, 'medium' );
+						echo 
+							'<div class="pdf ' .( $regenerate ? ' regenerated' : 'generated' ). '">'.
+							'<p class="img">'.$thumbnail.'</p>'.
+							'<p class="txt">PDF ID: <a href="'.get_edit_post_link( $pdf->ID ).'">'.$pdf->ID.'</a><br/>Thumb ID: <a href="'.get_edit_post_link( $thumbnail_id ).'">'.$thumbnail_id.'</a><br/><strong>' .( $regenerate ? 'The image was REGENERATED' : 'The new image was GENERATED' ). '</strong></p>'.
+							'</div>';
+							// echo "\n".get_attached_file( $thumbnail_id );
+							// print_r(wp_get_attachment_metadata( $thumbnail_id, false ));
+							// print_r(get_post( $thumbnail_id ));
+
+					} else {
+						echo 
+							'<div class="pdf error">'.
+							'<p class="txt">PDF ID: <a href="'.get_edit_post_link( $pdf->ID ).'">'.$pdf->ID.'</a><br/><strong>The image was not GENERATED!!</strong></p>'.
+							'</div>';
+					}
 				} else {
 					echo 
 						'<div class="pdf">'.
 						'<p class="img">'.get_the_post_thumbnail( $pdf->ID, 'medium' ).'</p>'.
-						'<p class="txt">ID: '.$pdf->ID.' / An image already exists</p>'.
+						'<p class="txt">PDF ID: <a href="'.get_edit_post_link( $pdf->ID ).'">'.$pdf->ID.'</a><br/>An image already exists</p>'.
 						'</div>';
 				}
 			endforeach; endif;
 			echo '</div><!-- #pdf-list -->'."\n";
+			echo '<style type="text/css">#pdf-generating { display:none; }</style>'."\n";
 			if ( $pigen_num == 0 ) $pigen_num = 'No image'; elseif ( $pigen_num == 1 ) $pigen_num = '1 image'; else $pigen_num = $pigen_num.' images'; echo '<h3>'.$pigen_num.' generated.</h3>'."\n";
 			echo '<p><a href="'.remove_query_arg( 'run', $_SERVER[ 'REQUEST_URI' ] ).'" class="button button-primary">' .__( 'Back to PDF Image Generator Settings', 'pdf-image-generator' ).'</a></p><br/>'."\n";
 
@@ -247,6 +286,7 @@ class PIGEN {
 				"\t\t\t".'<p class="subfield"><span class="float"><label for="pigen_maxwidth">'.__( 'Max Width' ).': <input name="pigen_maxwidth" type="number" id="pigen_maxwidth" value="'.( $opt[ 'maxwidth' ] ).'" onKeyup="this.value=this.value.replace( /[^0-9a-z]+/i,\'\' )" /> px</label></span><span class="float"><label for="pigen_maxheight">'.__( 'Max Height' ).': <input name="pigen_maxheight" type="number" id="pigen_maxheight" value="'.$opt[ 'maxheight' ].'" onKeyup="this.value=this.value.replace( /[^0-9a-z]+/i,\'\' )" /> px</label></span><span class="float"><label for="pigen_quality">'.__( 'Compression Quality', 'pdf-image-generator' ).': <input name="pigen_quality" type="number" min="1" max="100" id="pigen_quality" value="'.$opt[ 'quality' ].'" onKeyup="this.value=this.value.replace( /[^0-9a-z]+/i,\'\' )" /> ( 1 - 100 )</label></span></p>'."\n".
 				"\t\t\t".'<p class="subfield note">'.__( 'The parameter will be calculated if 0 or blank is entered.', 'pdf-image-generator' ).'</p>'."\n".	
 				"\t\t\t".'<p class="subfield"><span class="float">'.__( 'Select Generated Image File Type', 'pdf-image-generator' ).': </span><span class="float"><label for="pigen_image_type_jpg"><input type="radio" id="pigen_image_type_jpg" name="pigen_image_type" value="jpg" '.( isset( $opt[ 'image_type' ] ) && $opt[ 'image_type' ] === 'jpg' ? 'checked="checked"' : '' ).' />'.__( 'jpg' ).'</label></span><span class="float"><label for="pigen_image_type_png"><input type="radio" id="pigen_image_type_png" name="pigen_image_type" value="png" '.( isset( $opt[ 'image_type' ] ) && $opt[ 'image_type' ] === 'png' ? 'checked="checked"' : '' ).' />'.__( 'png' ).'</label></span></p>'."\n".
+				"\t\t\t".'<p class="subfield"><label for="pigen_iccprofile"><input type="checkbox" id="pigen_iccprofile" name="pigen_iccprofile" value="true" '.( isset( $opt[ 'iccprofile' ] ) && $opt[ 'iccprofile' ] === 'true' ? 'checked="checked"' : '' ).' />'.__( 'Convert CMYK files to RGB.', 'pdf-image-generator' ).'</label></p>'."\n".
 				"\t\t\t".'<p class="subfield"><span class="float"><label for="pigen_image_bgcolor">'.__( 'Background Color' ).': <input class="pigen_color_picker" name="pigen_image_bgcolor" type="text" id="pigen_image_bgcolor" value="'.( isset( $opt[ 'image_bgcolor' ] ) ? $opt[ 'image_bgcolor' ] : '' ).'" /></label></span></p>'."\n".
 				"\t\t".'</div>'."\n";
 
@@ -255,7 +295,7 @@ class PIGEN {
 				'thumbnail'	=> __( 'Thumbnail' ),
 				'medium'	=> __( 'Medium size' ),
 				'large'		=> __( 'Large size' ),
-				'full'		=> __( 'Full Size' ),
+				'fullsize'	=> __( 'Full Size' ),
 				'title'		=> __( 'Default' ).' ( '.__( 'Title' ).' )',
 				'url'		=> __( 'URL' ),
 				'caption'	=> __( 'Caption' ),
@@ -285,7 +325,7 @@ class PIGEN {
 				'</form>'."\n";
 			echo
 				'<h3 style="margin-top:40px;">' .__( 'Generate uploaded PDF thumbnails', 'pdf-image-generator' ). '</h3>'."\n".
-				'<p>' .__( 'It allows you to generate images of any already-uploaded PDFs in the Media Library. <br/>Please save changes before running the script.', 'pdf-image-generator' ). '</p>'."\n".
+				'<p>' .__( 'It allows you to generate images of any already-uploaded PDFs in the Media Library.', 'pdf-image-generator' ). '<br/>' .__( 'Please save changes before running the script.', 'pdf-image-generator' ). '<br/>' .__( 'If regenerating images, all existing thumbnails will be deleted.', 'pdf-image-generator' ). '</p>'."\n".
 				'<p><a href="'.add_query_arg( 'run', 'generate', $_SERVER[ 'REQUEST_URI' ] ).'" class="button button-primary">' .__( 'Generate images of PDFs that have no thumbnail', 'pdf-image-generator' ). '</a></p>'."\n".
 				'<p><a href="'.add_query_arg( 'run', 'regenerate', $_SERVER[ 'REQUEST_URI' ] ).'" class="button button-primary">' .__( 'Regenerate and replace images of all PDFs', 'pdf-image-generator' ). '</a></p>'."\n";
 		}
@@ -301,58 +341,63 @@ class PIGEN {
 	}
 
 
-	public function pigen_generate( $file ){ // Generate thumbnail from PDF
-		set_time_limit( 3000 );
+	public function pigen_generate( $attachment_id ){ // Generate thumbnail from PDF
+		set_time_limit( 0 );
 		$opt = get_option( 'pigen_options' );
-		$property = ( isset( $opt[ 'property' ] ) ? $opt[ 'property' ] : '' );
+		$property = ( isset( $opt[ 'property' ] ) && $opt[ 'property' ] ? $opt[ 'property' ] : false );
+		$iccprofile = ( $property && isset( $opt[ 'iccprofile' ] ) && $opt[ 'iccprofile' ] ? true : false );
 		$image_type = ( $property && isset( $opt[ 'image_type' ] ) && $opt[ 'image_type' ] == 'png' ? 'png' : 'jpg' );
 		$max_width = ( !empty( $opt[ 'maxwidth' ] ) ? ( int ) $opt[ 'maxwidth' ] : 1024 );
 		$max_height = ( !empty( $opt[ 'maxheight' ] ) ? ( int ) $opt[ 'maxheight' ] : 1024 );
-		$quality = ( !empty( $opt[ 'quality' ] ) ? ( int ) $opt[ 'quality' ] : 80 );
-		if ( $quality > 100 ) $quality = 100;
-		$image_bgcolor = ( $property && isset( $opt[ 'image_bgcolor' ] ) ? $opt[ 'image_bgcolor' ] : 'white' );
+		$setReso = 128;
+		if ( $property ){
+			$setReso = ceil( max( $max_height, $max_width )*0.16 );
+			if ( $setReso < 128 ) $setReso = 128;
+			$quality = ( !empty( $opt[ 'quality' ] ) ? ( int ) $opt[ 'quality' ] : 80 );
+			if ( $quality > 100 ) $quality = 100;
+		}
+		$image_bgcolor = ( $property && isset( $opt[ 'image_bgcolor' ] ) && $opt[ 'image_bgcolor' ] ? $opt[ 'image_bgcolor' ] : 'white' );
 		$verify_imagick = ( isset( $opt[ 'verify_imagick' ] ) ? $opt[ 'verify_imagick' ] : '' );
-		$file_basename = str_replace( '.pdf', '-pdf', basename( $file ) ).'.'.$image_type;
-		$file_basename = apply_filters( 'pigen_filter_convert_file_basename', $file_basename );
-		$file_url = str_replace( basename( $file ), $file_basename, $file );
+
+		$file = get_attached_file( $attachment_id );
+		$new_filename = sanitize_file_name( str_replace( '.pdf', '-pdf', basename( $file ) ) ).'.'.$image_type;
+		$new_filename = wp_unique_filename( dirname( $file ), $new_filename );
+		$new_filename = apply_filters( 'pigen_filter_convert_file_basename', $new_filename );
+		$file_url = str_replace( basename( $file ), $new_filename, $file );
+
 		if ( $verify_imagick == 'imagick' ) { // Imagick API
 			$version = $this->pigen_imagick_ver();
 			try { 
 				$imagick = new imagick();
+				$imagick->setResolution( $setReso, $setReso );
+				$imagick->readimage( $file.'[0]' );
 				if ( $property ) {
-					$imagick->setResolution( 300, 300 );
-					$imagick->readimage( $file.'[0]' );
 					$imagick->setCompressionQuality( $quality );
 					$imagick->scaleImage( $max_width, $max_height, true );
-				} else {
-					$imagick->readimage( $file.'[0]' );
-					$imagick->setResolution( 72, 72 );
-				}
+				} 
 				$imagick->setImageFormat( $image_type ); 
-				if ( version_compare( $version,'6.8.0' ) >= 0 && method_exists('Imagick','setImageAlphaChannel') ) {
-					$imagick->setImageBackgroundColor( $image_bgcolor );
-					if ( defined('Imagick::ALPHACHANNEL_REMOVE') ){ // Imagick::ALPHACHANNEL_REMOVE added in 3.2.0b2
+				$imagick->setImageBackgroundColor( $image_bgcolor );
+				if ( method_exists( 'Imagick','setImageAlphaChannel' ) ) {
+					if ( defined( 'Imagick::ALPHACHANNEL_REMOVE' ) ){ // Imagick::ALPHACHANNEL_REMOVE added in 3.2.0b2
 						$imagick->setImageAlphaChannel( Imagick::ALPHACHANNEL_REMOVE );
-						error_log('ALPHACHANNEL_REMOVE');
 					} else {
 						$imagick->setImageAlphaChannel( 11 );
-						error_log('11');
-					}	
+					}
+				} 
+				if ( method_exists( 'Imagick','mergeImageLayers' ) ){
 					$imagick->mergeImageLayers( Imagick::LAYERMETHOD_FLATTEN );
-					$imagick = apply_filters( 'pigen_filter_convert_imagick', $imagick );
 				} else { // Imagick::flattenImages is deprecated in PHP 5.6
-					error_log('flattenImages');
-					$imagick->setImageBackgroundColor( $image_bgcolor );
 					$imagick = $imagick->flattenImages();
 				} 
+				$imagick = apply_filters( 'pigen_filter_convert_imagick', $imagick );
 				$colorspace = $imagick->getImageColorspace();
-				if ( $colorspace == Imagick::COLORSPACE_CMYK ) {
+				if ( $iccprofile && $colorspace == Imagick::COLORSPACE_CMYK ) {
 					$plugin_dir_path = plugin_dir_path( __FILE__ );
+					
 					if ( version_compare( $version,'6.3.6' ) >= 0 ){
 						$profiles = $imagick->getimageprofiles( '*', false );
 						$has_icc_profile = ( array_search( 'icc', $profiles ) !== false );
 						if ( $has_icc_profile === false ){
-							$imagick->stripImage();
 							$icc_cmyk = wp_remote_get( $plugin_dir_path.'iccprofiles/WebCoatedFOGRA28.icc' );
 							$imagick->profileImage( 'icc', $icc_cmyk );
 							unset( $icc_cmyk );
@@ -361,65 +406,54 @@ class PIGEN {
 					$icc_rgb = wp_remote_get( $plugin_dir_path.'iccprofiles/sRGB_ICC_v4_appearance_beta_displayclass.icc' );
 					$imagick->profileImage( 'icc', $icc_rgb );
 					unset( $icc_rgb ); 
-
-					$php_vs_arr = preg_split( "/\./", phpversion() );
-					$php_vs = $php_vs_arr[0] . '.' . $php_vs_arr[1];
-					if( $php_vs < 5.3 ) { //Adjust gamma by 20% for 5.2.x
-						$imagick->levelImage( 0, 2.0, $range[ 'quantumRangeString' ] );
-					} else { //PHP 5.3 hack for inverted colors
+					if( version_compare( phpversion(),'5.3' ) >= 0 ){ //PHP 5.3 hack for inverted colors
 						$imagick->negateImage( false, Imagick::CHANNEL_ALL );
-					}
+					} else { //Adjust gamma by 20% for 5.2.x
+						$imagick->levelImage( 0, 2.0, $range[ 'quantumRangeString' ] );
+					} 
 					$imagick->setImageColorSpace( Imagick::COLORSPACE_RGB );
 				}
+				$imagick->stripImage();
 				$imagick->writeImage( $file_url ); 
 				$imagick->clear();
-				$imagick->destroy();
-			} catch ( ImagickException $e ){
+			} catch ( ImagickException $err ){
+				error_log($err);
 				$file_url = false;
-			} catch ( Exception $e ){
+			} catch ( Exception $err ){
+				error_log($err);
 				$file_url = false;
 			}
 		} else { // imageMagick
 			$version = $this->pigen_imageMagick_ver();
-			$colorspace = "";
 			if ( version_compare( $version,'6.7.7' ) >= 0 ) {
-				$density = "-density 300 -set units PixelsPerInch"; 
+				$density = "-density {$setReso} -set units PixelsPerInch"; 
 				$alphaoff = "-alpha remove"; 
-				$colorspace = "-colorspace sRGB";
 			} else {
 				$alphaoff = "-flatten"; 
 				$density = "-density 72"; 
 			}
-			$get_color = exec( "identify -format '%[colorspace]' {$file}[0]", $output, $return );
-			if ( !$return && stripos( $get_color, 'cmyk' ) !== false ){ // Return non-zero upon an error
-				$plugin_dir_path = plugin_dir_path( __FILE__ );
-				// if ( version_compare( $version,'6.8.7.2' ) >= 0 ) {
-				// 	$get_icc = exec( "identify -format %[profile:icc] {$file}[0]", $output, $return );
-				// 	if ( !$return ){
-				// 		if( stripos( $get_icc,'uncoated' ) !== false ){
-				// 			$colorspace = "-strip -profile {$plugin_dir_path}iccprofiles/UncoatedFOGRA29.icc -profile {$plugin_dir_path}iccprofiles/sRGB_ICC_v4_appearance_beta_displayclass.icc -colorspace sRGB";
-				// 		} elseif( stripos( $get_icc,'coated' ) !== false ){
-				// 			$colorspace = "-strip -profile {$plugin_dir_path}iccprofiles/CoatedFOGRA39.icc -profile {$plugin_dir_path}iccprofiles/sRGB_ICC_v4_appearance_beta_displayclass.icc -colorspace sRGB";
-				// 		} elseif( stripos( $get_icc,'news' ) !== false ){
-				// 			$colorspace = "-strip -profile {$plugin_dir_path}iccprofiles/GenericCMYK.icm -profile {$plugin_dir_path}iccprofiles/sRGB_ICC_v4_appearance_beta_displayclass.icc -colorspace sRGB";
-				// 		}
-				// 	}
-				// }
-				if ( !$colorspace )
-					$colorspace = "-strip -profile {$plugin_dir_path}iccprofiles/WebCoatedFOGRA28.icc -profile {$plugin_dir_path}iccprofiles/sRGB_ICC_v4_appearance_beta_displayclass.icc -colorspace sRGB";
-			}
 			if ( $property ) {
-				if ( $image_bgcolor !== 'white' && preg_match( '/^#[a-f0-9]{6}$/i', $image_bgcolor ) ) $image_bgcolor = "\"$image_bgcolor\"";
-				$imageMagick = "convert {$density} -quality {$quality} -background {$image_bgcolor} {$alphaoff} {$file}[0] {$colorspace} -resize {$max_width}x{$max_height} {$file_url}";
+				$colorspace = "";
+				if ( $iccprofile ){
+					$get_color = exec( "identify -format '%[colorspace]' {$file}", $output, $return );
+					if ( !$return && stripos( $get_color, 'cmyk' ) !== false ){ // Return non-zero upon an error
+						$plugin_dir_path = plugin_dir_path( __FILE__ );
+						$CMYK_icc = $plugin_dir_path.'iccprofiles/WebCoatedFOGRA28.icc';
+						$RGB_icc = $plugin_dir_path.'iccprofiles/sRGB_ICC_v4_appearance_beta_displayclass.icc';
+						$colorspace = "-strip -profile {$CMYK_icc} -profile {$RGB_icc} -colorspace sRGB"; // Convert CMYK to sRGB
+					}
+				}
+				if ( $image_bgcolor != 'white' && preg_match( '/^#[a-f0-9]{6}$/i', $image_bgcolor ) ) $image_bgcolor = "\"$image_bgcolor\"";
+				$imageMagick = "convert {$density} -quality {$quality} -background {$image_bgcolor} {$alphaoff} {$file}[0] -resize {$max_width}x{$max_height} {$colorspace} {$file_url}";
 			} else {
-				$imageMagick = "convert -density 72 -background white {$alphaoff} {$file}[0] {$colorspace} {$file_url}";
+				$imageMagick = "convert -density {$setReso} -background white {$file}[0] {$file_url}";
 			}
 
 			$imageMagick = apply_filters( 'pigen_filter_convert_imageMagick', $imageMagick, $file.'[0]', $file_url, $max_width, $max_height );
 			exec( $imageMagick, $output, $return ); // Convert pdf to image
-			if ( $return ) {
+			if ( $return !== 0 ) {
 				$file_url = false; // Return non-zero upon an error
-				// error_log( 'convert error' );
+				error_log( "convert is failed : {$file}[0]" );
 			}
 		}
 		return $file_url;
@@ -428,32 +462,54 @@ class PIGEN {
 
 	public function pigen_attachment( $attachment_id ){ // Generate thumbnail from PDF
 		if ( get_post_mime_type( $attachment_id ) === 'application/pdf' ){
-			$file = get_attached_file( $attachment_id );
-			$file_url = $this->pigen_generate( $file );
-			if ( file_exists( $file_url ) ){
-				$thumbnail_id = get_post_meta( $attachment_id, '_thumbnail_id', true );
-				if ( !$thumbnail_id ){
-					$file_title = esc_attr( get_the_title( $attachment_id ) );
-					$attachment = get_post( $attachment_id );
-					$thumbnail = array( 
-						'post_type' => 'attachment',
-						'post_mime_type' => 'image/jpeg',
-						'post_title' => $file_title,
-						'post_excerpt' => $attachment->post_excerpt,
-						'post_content' => $attachment->post_content,
-						'post_parent' => $attachment_id
-					);
-					$thumbnail_id = wp_insert_attachment( $thumbnail, $file_url );
-					update_post_meta( $thumbnail_id, '_wp_attachment_image_alt', sprintf( __( 'thumbnail of %s', 'pdf-image-generator' ), $file_title ) );
+
+			$thumbnail_id = get_post_meta( $attachment_id, '_thumbnail_id', true );
+			if ( $thumbnail_id ){ // delete ex thumb 
+				$ex_file = get_attached_file( $thumbnail_id );
+				$meta = wp_get_attachment_metadata( $thumbnail_id );
+
+				if ( isset( $meta['sizes'] ) && is_array( $meta['sizes'] ) ) {
+					$uploadpath = wp_get_upload_dir();
+					foreach ( $meta['sizes'] as $size => $sizeinfo ) {
+						$intermediate_file = str_replace( basename( $ex_file ), $sizeinfo['file'], $ex_file );
+						wp_delete_file( path_join( $uploadpath['basedir'], $intermediate_file ) );
+					}
+				};
+				wp_delete_file( $ex_file );
+			}
+			$new_file = $this->pigen_generate( $attachment_id );
+			if ( file_exists( $new_file ) ){ // new thumb
+				$file_title = esc_attr( get_the_title( $attachment_id ) );
+				$attachment = get_post( $attachment_id );
+				$filetype = wp_check_filetype( basename( $new_file ), null );
+				$new_thumb = array( 
+					'post_type' => 'attachment',
+					'post_mime_type' => $filetype['type'],
+					'post_title' => $file_title,
+					'post_excerpt' => $attachment->post_excerpt,
+					'post_content' => $attachment->post_content,
+					'post_parent' => $attachment_id,
+					'guid' => dirname($attachment->guid). '/' .basename( $new_file )
+				);
+				if ( $thumbnail_id ){ // if regenerating, overwite ex thumb ID.
+					$new_thumb['ID'] = $thumbnail_id;
+					wp_update_post( $new_thumb );
+ 					update_attached_file( $thumbnail_id, $new_file );
+				} else { // create new attachment
+					$thumbnail_id = wp_insert_attachment( $new_thumb, $new_file );
+					update_post_meta( $thumbnail_id, '_wp_attachment_image_alt', sprintf( __( 'thumbnail of %s', 'pdf-image-generator' ), $file_title ) );				
+					update_post_meta( $attachment_id, '_thumbnail_id', $thumbnail_id );
 				}
-				update_post_meta( $attachment_id, '_thumbnail_id', $thumbnail_id );
-				$metadata = wp_generate_attachment_metadata( $thumbnail_id, $file_url );
-				if ( !empty( $metadata ) && ! is_wp_error( $metadata ) ) {
+				$metadata = wp_generate_attachment_metadata( $thumbnail_id, $new_file );
+				if ( !empty( $metadata ) && !is_wp_error( $metadata ) ) {
 					wp_update_attachment_metadata( $thumbnail_id, $metadata );
 				}
-			}
+
+				$return = $thumbnail_id;
+			} 
 		}
-		return $attachment_id;
+		if ( empty( $return ) ) $return = false;
+		return $return;
 	}
 
 
@@ -463,6 +519,7 @@ class PIGEN {
 			if ( !$attach_image_id ) return $html;
 			$linkto = get_post_meta( $attach_id, '_pigen_attach_linkto', true );
 			if ( $linkto === 'file' ) $attach_url = wp_get_attachment_url( $attach_id );
+			elseif ( $linkto === 'image' ) $attach_url = wp_get_attachment_url( $attach_image_id );
 			elseif ( $linkto === 'post' ) $attach_url = get_attachment_link( $attach_id );
 			else $attach_url = '';
 			$attach_title = isset( $attachment[ 'post_title' ] ) ? $attachment[ 'post_title' ] : '';
@@ -510,14 +567,12 @@ class PIGEN {
 			$opt = get_option( 'pigen_options' );
 			if ( $thumbnail_id ){
 				if ( isset( $opt[ 'hidethumb' ] ) && $opt[ 'hidethumb' ] == 'true' ) {
-					wp_delete_post( $thumbnail_id );
+					wp_delete_attachment( $thumbnail_id );
 				} else {
+					// wp_update_post( array( 'ID' => $attachment_id, 'guid' => '' ) );
 					$post_parent = get_post( $attachment_id )->post_parent;
 					if ( $post_parent ){
-						$thumb = array();
-						$thumb[ 'ID' ] = $thumbnail_id;
-						$thumb[ 'post_parent' ] = $post_parent;
-						wp_update_post( $thumb );
+						wp_update_post( array( 'ID' => $thumbnail_id, 'post_parent' => $post_parent ) );
 					}
 				}
 			}
@@ -529,8 +584,10 @@ class PIGEN {
 		$opt = get_option( 'pigen_options' );
 		if ( isset( $opt[ 'changeicon' ] ) && $opt[ 'changeicon' ] === '' ) return $icon;
 		if ( strpos( $_SERVER[ 'REQUEST_URI' ], '/wp-admin/upload.php' ) === false && $mime === 'application/pdf' ){
-			$thumbnail = wp_get_attachment_image_src ( $attachment_id, 'medium' );
-			if ( $thumbnail ) $icon = $thumbnail[0];
+			$get_image = wp_get_attachment_image_src ( $attachment_id, 'medium' );
+			if ( $get_image ) {
+				$icon = $get_image[0];
+			} 
 		}
 		return $icon;
 	}
@@ -541,15 +598,16 @@ class PIGEN {
 			$thumbnail_id = get_post_meta( $attachment_id, '_thumbnail_id', true );
 			if ( $thumbnail_id ){
 				$get_image = wp_get_attachment_image_src ( $thumbnail_id, $size );
-				$image = array( $get_image[0], $get_image[1], $get_image[2] );
-			}
-
+				if ( $get_image ) {
+					$image = array( $get_image[0], (int)$get_image[1], (int)$get_image[2] );
+				}
+			} 
 		}
 		return $image;
 	}
 
 
-	public function pigen_wp_get_attachment_image_attributes( $attr, $attachment, $size ) {
+	public function pigen_wp_get_attachment_image_attributes( $attr, $attachment ) {
 		if ( $attachment->post_parent && get_post_mime_type( $attachment->post_parent ) === 'application/pdf' ){
 			$attr[ 'class' ] .= ' thumb-of-pdf';
 		}
@@ -558,11 +616,10 @@ class PIGEN {
 
 
 	public function pigen_wp_get_attachment_metadata( $data, $post_id ) {
-		if ( get_post_mime_type ( $post_id ) === 'application/pdf' ){
+		if ( $data && $post_id && get_post_mime_type ( $post_id ) === 'application/pdf' ){
 			$thumbnail_id = get_post_meta( $post_id, '_thumbnail_id', true );
 			if ( $thumbnail_id ){
-				$image_data = wp_get_attachment_metadata ( $thumbnail_id );
-				$data[ 'sizes' ] = $image_data[ 'sizes' ];
+				$data = serialize( get_post_meta( $thumbnail_id, '_wp_attachment_metadata', true ) );
 			}
 		}
 		return $data;
@@ -570,6 +627,8 @@ class PIGEN {
 
 
 	public function pigen_ajax_query_attachments_args( $query ) { 
+
+		global $wpdb;
 		$opt = get_option( 'pigen_options' );
 		if ( isset( $query[ 'post_mime_type' ] ) && $query[ 'post_mime_type' ] === 'image_n_pdf' ){
 			$post_parent = ( isset( $query[ 'post_parent' ] ) && $query[ 'post_parent' ] ? '&post_parent='.$query[ 'post_parent' ] : '' );
@@ -580,11 +639,13 @@ class PIGEN {
 		if ( isset( $opt[ 'hidethumb' ] ) && $opt[ 'hidethumb' ] === '' ){
 			if ( isset( $query[ 'post_parent' ] ) && $query[ 'post_parent' ] ){
 				$post__in = array();
-				$get_posts = get_posts( 'post_type=attachment&post_parent='.$query[ 'post_parent' ] );
-				if ( $get_posts ): foreach ( $get_posts as $get ):
-					$post__in[] = $get->ID;
-					$thumbnail_id = get_post_meta( $get->ID, '_thumbnail_id', true );
-					if ( $get->post_mime_type == 'application/pdf' && $thumbnail_id ) $post__in[] = $thumbnail_id;
+
+				$results = $wpdb->get_results("SELECT ID FROM $wpdb->posts WHERE $wpdb->posts.post_parent = ".$query[ 'post_parent' ]." AND $wpdb->posts.post_type = 'attachment' " );
+
+				if ( $results ): foreach ( $results as $result ):
+					$post__in[] = $result->ID;
+					$thumbnail_id = get_post_meta( $result->ID, '_thumbnail_id', true );
+					if ( get_post_mime_type ( $result->ID ) === 'application/pdf' && $thumbnail_id ) $post__in[] = $thumbnail_id;
 				endforeach; endif;
 				if ( $post__in ){
 					$query[ 'post_parent' ] = false;
@@ -593,7 +654,6 @@ class PIGEN {
 			}
 		} else { // Hide thumbnail files in the library.
 			$post__not_in = array();
-			global $wpdb;
 			$results = $wpdb->get_results( 
 				"SELECT meta_value FROM $wpdb->posts, $wpdb->postmeta WHERE $wpdb->posts.ID = $wpdb->postmeta.post_id AND $wpdb->posts.post_type = 'attachment' AND $wpdb->posts.post_mime_type = 'application/pdf' AND $wpdb->postmeta.meta_key = '_thumbnail_id' "
 			);
@@ -603,6 +663,7 @@ class PIGEN {
 			$query[ 'post__not_in' ] = $post__not_in;
 		}
 		return $query;
+
 	}
 
 
@@ -631,22 +692,88 @@ class PIGEN {
 		if ( isset( $opt[ 'featured' ] ) && $opt[ 'featured' ] === '' ) return;
 ?>
 	<script type="text/javascript">
-		l10n = wp.media.view.l10n = typeof _wpMediaViewsL10n === 'undefined' ? {} : _wpMediaViewsL10n;
 		wp.media.view.AttachmentFilters.Uploaded.prototype.createFilters = function() {
 			var type = this.model.get( 'type' ),
 				types = wp.media.view.settings.mimeTypes,
 				text;
 			if ( types && type ) text = types[ type ];
 			this.filters = {
-				all: { text: text || l10n.allMediaItems, props: { uploadedTo: null, orderby: 'date', order: 'DESC' }, priority: 10 },
-				uploaded: { text: l10n.uploadedToThisPost, props: { uploadedTo: wp.media.view.settings.post.id, orderby: 'menuOrder', order: 'ASC' }, priority: 20 }
+				all: {
+					text: text || <?php echo '\''.__( 'All' ).'\''; ?>,
+					props: {
+						uploadedTo: null,
+						orderby: 'date',
+						order:   'DESC'
+					},
+					priority: 10
+				},
+
+				uploaded: {
+					text: <?php echo '\''.__( 'Uploaded to this post' ).'\''; ?>,
+					props: {
+						uploadedTo: wp.media.view.settings.post.id,
+						orderby: 'menuOrder',
+						order:   'ASC'
+					},
+					priority: 20
+				},
+
+				unattached: {
+					text: <?php echo '\''.__( 'Unattached' ).'\''; ?>,
+					props: {
+						uploadedTo: 0,
+						orderby: 'menuOrder',
+						order:   'ASC'
+					},
+					priority: 50
+				}
 			};
 			if ( this.options.controller._state === 'featured-image' ){
 				this.filters = {
-					all: { text: <?php echo '\''.__( 'Image' ).' & '.__( 'PDF' ).'\''; ?>, props: { type: 'image_n_pdf', uploadedTo: null, orderby: 'date', order: 'DESC' }, priority: 20 },
-					image: { text: <?php echo '\''.__( 'Image' ).'\''; ?>, props: { type: 'image', uploadedTo: null, orderby: 'date', order: 'DESC' }, priority: 20 },
-					uploaded: { text: l10n.uploadedToThisPost, props: { type: 'image_n_pdf', uploadedTo: wp.media.view.settings.post.id, orderby: 'menuOrder', order: 'ASC' }, priority: 10 },
-					unattached: { text: l10n.unattached, props: { 	status: null, uploadedTo: 0, type: null, orderby: 'menuOrder', order: 'ASC' }, priority: 50 },
+					all: { 
+						text: <?php echo '\''.__( 'Image' ).' & '.__( 'PDF' ).'\''; ?>,
+						props: { 
+							type: 'image_n_pdf', 
+							uploadedTo: null, 
+							orderby: 'date', 
+							order: 'DESC' 
+						}, 
+						priority: 10 
+					},
+
+					image: { 
+						text: <?php echo '\''.__( 'Image' ).'\''; ?>,
+						props: { 
+							type: 'image',
+							uploadedTo: null,
+							orderby: 'date',
+							order: 'DESC'
+						}, 
+						priority: 20 
+					},
+
+					uploaded: { 
+						text: <?php echo '\''.__( 'Uploaded to this post' ).'\''; ?>, 
+						props: { 
+							type: 'image_n_pdf', 
+							uploadedTo: wp.media.view.settings.post.id, 
+							orderby: 'menuOrder', 
+							order: 'ASC' 
+						}, 
+						priority: 30 
+					},
+
+					unattached: { 
+						text: <?php echo '\''.__( 'Unattached' ).'\''; ?>,
+						props: { 
+							status: null,
+							uploadedTo: 0,
+							type: null,
+							orderby: 'menuOrder',
+							order: 'ASC'
+						},
+						priority: 50
+					},
 				};
 			}
 		}; // End create filters
@@ -656,20 +783,21 @@ class PIGEN {
 		$featuredimage = get_post_meta( $post_id, '_thumbnail_id', true );
 		if ( $featuredimage ) {
 			$pdf_id = get_post( $featuredimage )->post_parent;
-			if ( $pdf_id && get_post_mime_type ( $pdf_id ) === 'application/pdf' )
+			if ( $pdf_id && get_post_mime_type ( $pdf_id ) === 'application/pdf' ){
 				echo "\t\t".'wp.media.view.settings.post.featuredImageId = '.$pdf_id.';'."\n";
+			}
 		}
 	endif;
 ?>
-		wp.media.view.Modal.prototype.on( 'ready', function(){
-			var modal = jQuery( '.media-modal' );
-			modal.find( 'a.media-menu-item' ).click( function(){ 
+		wp.media.view.Modal.prototype.on( 'open', function(){
+			<!-- wp.media.frame.content.get().setImageAlphaChannel.selection.reset(); -->
+			jQuery( '.media-modal' ).find( 'a.media-menu-item' ).click( function(){ 
 				if ( jQuery( this ).html() === "<?php _e( 'Featured Image' ); ?>" ){
 					jQuery( 'select.attachment-filters [value="uploaded"]' ).attr( 'selected', true ).parent().trigger( 'change' ); 
 				}
 			} );
-		} );
-		wp.media.featuredImage.frame().on( 'ready', function(){ 
+		});
+		wp.media.featuredImage.frame().on( 'open', function(){ 
 			jQuery( '.media-modal' ).addClass( 'media-modal-fi' );
 			jQuery( 'select.attachment-filters [value="uploaded"]' ).attr( 'selected', true ).parent().trigger( 'change' ); // Change the default view to "Uploaded to this post".
 		} ).on( 'close', function(){ 
@@ -694,6 +822,7 @@ class PIGEN {
 		$form_fields[ 'pigen_attach_linkto' ][ 'html' ] = 
 			'<select name="'. "attachments[{$post->ID}][pigen_attach_linkto]" .'">'.
 			'<option ' .selected( $val, 'file', false ). ' value="file">'. __( 'PDF Media File', 'pdf-image-generator' ). '</option>'.
+			'<option ' .selected( $val, 'image', false ). ' value="image">'. __( 'Image Media File', 'pdf-image-generator' ). '</option>'.
 			'<option ' .selected( $val, 'post', false ). ' value="post">'. __( 'Attachment Page' ). '</option>'.
 			'<option ' .selected( $val, 'none', false ). ' value="none">'. __( 'None' ). '</option>'.
 			'</select>'. "\n";
@@ -713,7 +842,7 @@ class PIGEN {
 			'thumbnail'	=> __( 'Thumbnail' ),
 			'medium'	=> __( 'Medium size' ),
 			'large'		=> __( 'Large size' ),
-			'full'		=> __( 'Full Size' ),
+			'fullsize'	=> __( 'Full Size' ),
 			'title'		=> __( 'Default' ).' ( '.__( 'Title' ).' )',
 			'url'		=> __( 'URL' ),
 			'caption'	=> __( 'Caption' ),
@@ -744,7 +873,7 @@ class PIGEN {
 			'<option ' .selected( $val, 'right', false ). ' value="right">'. __( 'Right' ). '</option>'.
 			'<option ' .selected( $val, 'none', false ). ' value="none">'. __( 'None' ). '</option>'.
 			'</select>'. "\n".
-			'<style type="text/css">.attachment-details[data-id="' .$post->ID. '"]:after { content:"' .__( 'Attachment Display Settings' ). '"; font-weight:bold; color:#777; padding:20px 0 0; text-transform:uppercase; clear:both; display:block; } .media-types-required-info, .attachment-display-settings, .attachment-compat, #post-body .compat-attachment-fields { display:none!important; } .media-modal-fi .attachment-details[data-id="' .$post->ID. '"]:after, .media-modal-fi tr.compat-field-pigen_attach_linkto, .media-modal-fi tr.compat-field-pigen_attach_size, .media-modal-fi tr.compat-field-pigen_attach_align { display:none!important; }</style>'."\n";
+			'<style type="text/css">.attachment-details[data-id="' .$post->ID. '"]:after { content:"' .__( 'Attachment Display Settings' ). '"; font-weight:bold; color:#777; padding:20px 0 0; text-transform:uppercase; clear:both; display:block; } .media-types-required-info, .attachment-display-settings, .attachment-compat, #post-body tr.compat-field-pigen_attach_linkto, #post-body tr.compat-field-pigen_attach_size, #post-body tr.compat-field-pigen_attach_align { display:none!important; } .media-modal-fi .attachment-details[data-id="' .$post->ID. '"]:after, .media-modal-fi tr.compat-field-pigen_attach_linkto, .media-modal-fi tr.compat-field-pigen_attach_size, .media-modal-fi tr.compat-field-pigen_attach_align { display:none!important; }</style>'."\n";
 		return $form_fields;
 	}
 
@@ -766,8 +895,9 @@ class PIGEN {
 		if ( isset( $opt[ 'featured' ] ) && $opt[ 'featured' ] === 'true' ) {
 			$featuredimage = get_post_meta( $post_id, '_thumbnail_id', true );
 			if ( $featuredimage && get_post_mime_type ( $featuredimage ) === 'application/pdf' ){
-				if ( $new_featuredimage = get_post_meta( $featuredimage, '_thumbnail_id', true ) ){
-					update_post_meta( $post_id, '_thumbnail_id', $new_featuredimage );
+				$new_featuredimage = get_post_meta( $featuredimage, '_thumbnail_id', true );
+				if ( $new_featuredimage ){
+					update_post_meta( $post_id, '_thumbnail_id', (int)$new_featuredimage );
 				}
 			}
 		}
